@@ -58,8 +58,9 @@ int main()
     const int trading_days = 252;
     const int simulations = 200'000;
 
-    // === Reproducible random generator ===
-    mt19937 gen(42); // fixed seed for reproducibility
+    // === Random generator ===
+    random_device rd;
+    mt19937 gen(rd());  // seed with a random device for true randomness
 
     // === Simulation result variables ===
     double best_sharpe = -1e9;
