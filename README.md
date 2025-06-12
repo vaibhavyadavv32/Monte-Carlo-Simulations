@@ -66,7 +66,7 @@ pip install pandas plotly yfina
 ### Step 2: Build and run C++ simulation
 
 ```bash
-g++ -std=c++11 -O2 src/main.cpp -o portfolio_sim
+g++ -std=c++11 -O2 main.cpp -o portfolio_sim
 ./portfolio_sim
 ```
 
@@ -102,7 +102,6 @@ python Visualisation.py
 
 ## Notes
 
-- The Monte Carlo simulation uses a fixed random seed (`42`) for reproducibility.
 - The portfolio weights are generated randomly such that they sum to 1.
 - Annualized returns and risks assume 252 trading days per year.
 - Sharpe ratio calculation assumes a risk-free rate of 0 by default (can be changed in code).
