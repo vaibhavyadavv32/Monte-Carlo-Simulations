@@ -7,6 +7,9 @@
 #include <cmath>
 #include <iostream>
 #include <iomanip> // for std::setprecision
+#include <vector>  // for std::vector
+#include <random>  // for std::random_device, std::mt19937
+
 using namespace std;
 
 int main() 
@@ -19,33 +22,64 @@ int main()
         return 1;
     }
 
-    string line;
-    getline(fin, line); // skip header
+    string header_line;
+    if (!getline(fin, header_line)) 
+    {
+        cerr << "Failed to read header line from CSV." << endl;
+        return 1;
+    }
+    
+    // === Dynamically determine the number of stocks ===
+    stringstream ss_header(header_line);
+    string token;
+    int total_columns = 0;
+    while (getline(ss_header, token, ',')) 
+    {
+        total_columns++;
+    }
 
+    // The formula: (Total Columns - 1 for Date) / 2 (for prices and returns)
+    if (total_columns <= 1 || (total_columns - 1) % 2 != 0) {
+        cerr << "Error: Invalid CSV format. Expected Date column, N price columns, and N return columns." << endl;
+        return 1;
+    }
+    const int num_stocks = (total_columns - 1) / 2;
+    cout << "Detected " << num_stocks << " stocks from the CSV file." << endl;
+
+
+    // === Read the rest of the data ===
     vector<vector<double>> return_data;
+    string line;
     while (getline(fin, line)) 
     {
         stringstream ss(line);
         string cell;
         vector<double> row;
 
-        getline(ss, cell, ','); // skip date column
+        // Skip date column
+        getline(ss, cell, ','); 
 
-        // Skip price columns (10)
-        for (int i = 0; i < 10; ++i) getline(ss, cell, ',');
-
-        // Read 10 daily return columns
-        for (int i = 0; i < 10; ++i) 
+        // Skip price columns using the dynamic count
+        for (int i = 0; i < num_stocks; ++i) 
         {
-            getline(ss, cell, ',');
+            if (!getline(ss, cell, ',')) break; // Safety break
+        }
+
+        // Read daily return columns using the dynamic count
+        for (int i = 0; i < num_stocks; ++i) 
+        {
+            if (!getline(ss, cell, ',')) break; // Safety break
             try {
                 row.push_back(stod(cell));
             } catch (...) {
-                row.push_back(0.0); // fallback in case of bad data
+                row.push_back(nan("")); // Fallback for bad data
             }
         }
-
-        return_data.push_back(row);
+        
+        // Ensure the row has the correct number of returns before adding
+        if(row.size() == num_stocks) {
+            return_data.push_back(row);
+        }
     }
     fin.close();
 
@@ -53,14 +87,22 @@ int main()
     Matrix returns(return_data);
     Matrix cov = returns.covariance_matrix();
     vector<double> mean_returns = returns.mean_per_column();
-    Portfolio port(returns);
+    
+    // Check if data was loaded correctly
+    if(mean_returns.empty()){
+        cerr << "No valid return data was loaded. Exiting." << endl;
+        return 1;
+    }
+
+    for (size_t i = 0; i < mean_returns.size(); ++i)
+        cout << "Mean return of asset " << i << " = " << mean_returns[i] << endl;
 
     const int trading_days = 252;
-    const int simulations = 200'000;
+    const int simulations = 200000;
 
     // === Random generator ===
     random_device rd;
-    mt19937 gen(rd());  // seed with a random device for true randomness
+    mt19937 gen(rd());
 
     // === Simulation result variables ===
     double best_sharpe = -1e9;
@@ -93,15 +135,12 @@ int main()
         double annual_std = port_std * sqrt(trading_days);
         double sharpe = sharpe_ratio(annual_ret, annual_std);
 
-        // Skip invalid or degenerate portfolios
-        if (std::isnan(sharpe) || annual_std < 1e-6) continue;
+        if (annual_std < 1e-3 || sharpe > 10) continue;
 
-        // Write simulation to CSV
         sim_out << annual_ret << "," << annual_std << "," << sharpe;
         for (double w : weights) sim_out << "," << w;
         sim_out << "\n";
 
-        // Track the best Sharpe ratio
         if (sharpe > best_sharpe) 
         {
             best_sharpe = sharpe;
@@ -110,7 +149,6 @@ int main()
             best_risk = annual_std;
         }
 
-        // Optional: Progress display
         if (i % 100000 == 0 && i > 0)
             cerr << "Simulated " << i << " portfolios...\n";
     }
@@ -125,7 +163,7 @@ int main()
 
     cout << "Optimal Portfolio Weights:\n";
     for (size_t i = 0; i < best_weights.size(); ++i)
-        cout << "  Asset " << i << ": " << best_weights[i] << endl;
+        cout << "   Asset " << i << ": " << best_weights[i] << endl;
 
     return 0;
 }
